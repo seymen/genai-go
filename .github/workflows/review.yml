@@ -1,0 +1,38 @@
+name: 'PR Code Review'
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  id-token: write        # Required for GitHub OIDC token minting
+  contents: read          # Read repository contents
+  pull-requests: write   # Post review comments on pull requests
+  issues: write          # Add reactions and comments to issue/PR threads
+
+jobs:
+  review:
+    name: 'Review PR with Google Cloud Managed Agent'
+    if: ${{ github.event.issue.pull_request != null && startsWith(github.event.comment.body, '/review') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Direct Workload Identity Federation
+      # Automatically creates Application Default Credentials (ADC) backed by GCP STS
+      - id: auth
+        name: Authenticate to Google Cloud (Direct WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+
+      # Run Reviewer Action (uses ADC automatically)
+      - name: Run Managed Code Reviewer
+        uses: seymen/managed-code-reviewer@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          gcp_project_id: ${{ vars.GCP_PROJECT_ID }}
+          gcp_location: ${{ vars.GCP_LOCATION || 'us-central1' }}
+          gcp_agent_id: ${{ vars.GCP_AGENT_ID }}
+          review_timeout: '10m'
